@@ -1,12 +1,12 @@
 package com.example.ffmpegsdlplayer.activity;
 
+import android.graphics.SurfaceTexture;
 import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
 import com.example.ffmpegsdlplayer.media.opgl.YUVRender;
-import java.lang.ref.WeakReference;
 
 /**
  * Created by h26376 on 2018/4/16.
@@ -15,33 +15,52 @@ import java.lang.ref.WeakReference;
 public class GLRenderer {
     private final String TAG = "GLRenderer";
     private Thread updateThread;
-    private RenderListener listener;
+    private DecodeListener listener;
     private YUVRender yuvRender;
-
+    private boolean updateSurface;
+    private int video_width;
+    private int video_height;
+    private int rotate;
+    private SurfaceTexture mSurfaceTexture;
     static {
         System.loadLibrary("ffmpeg");
         System.loadLibrary("yuv");
         System.loadLibrary("render");
     }
 
-    public GLRenderer(SurfaceView surface) {
+    public GLRenderer(SurfaceView surfaceView, final int mode) {
         Log.i(TAG, "GLRenderer :: GLRenderer");
-
-        surface.getHolder().addCallback(new SurfaceHolder.Callback() {
+        surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
                 Log.i(TAG, "SurfaceHolder :: surfaceCreated");
-                yuvRender = new YUVRender(holder.getSurface());
-                yuvRender.init();
-                listener.surfaceCreated();
+                yuvRender = new YUVRender(holder.getSurface(), mode);
+                yuvRender.init(new YUVRender.RenderListener(){
+                    @Override
+                    public void OnInit(SurfaceTexture surfaceTexture) {
+                        mSurfaceTexture = surfaceTexture;
+                        if(updateThread == null){
+                            listener.surfaceCreated();
+                        }
+                    }
+                }, new SurfaceTexture.OnFrameAvailableListener() {
+                    @Override
+                    public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+                        updateSurface = true;
+                        yuvRender.draw(surfaceTexture);
+                    }
+                });
             }
 
             @Override
             public void surfaceChanged(SurfaceHolder holder, int format, int screen_width, int screen_height) {
                 Log.i(TAG, "SurfaceHolder :: surfaceChanged format="+format+" screen_width="+screen_width+" screen_height="+screen_height);
                 yuvRender.setScreenSize(screen_width,screen_height);
-                yuvRender.ReDraw();
-                yuvRender.ReDraw();
+                updateParameter(video_width,video_height,rotate);
+                if(updateSurface) {
+                    yuvRender.ReDraw();
+                    yuvRender.ReDraw();
+                }
                 listener.surfaceChanged();
             }
 
@@ -99,15 +118,20 @@ public class GLRenderer {
     public void updateZoom(int zoom) {// 调整比例
         Log.i(TAG, "updateZoom: "+zoom);
         yuvRender.setZoom(zoom);
-        yuvRender.ReDraw();
+        if(updateSurface) {
+            yuvRender.ReDraw();
+        }
     }
     /**
      * this method will be called from native code, it happens when the video is about to play or
      * the video size changes.
      */
     public void updateParameter(int video_width, int video_height, int rotate) {
+        this.video_width = video_width;
+        this.video_height = video_height;
+        this.rotate = rotate;
         Log.i(TAG, "updateParameter pixel W x H : "+ video_width + "x" + video_height + " rotate :" + rotate);
-        switch (rotate) {
+        switch (this.rotate) {
             case 0:
                 yuvRender.setRotation(Surface.ROTATION_0,false,false);
                 break;
@@ -124,8 +148,7 @@ public class GLRenderer {
                 yuvRender.setRotation(Surface.ROTATION_0,false,false);
                 break;
         }
-        yuvRender.setVideoSize(video_width, video_height);
-        yuvRender.ReDraw();
+        yuvRender.setVideoSize(this.video_width, this.video_height);
     }
 
     /**
@@ -134,7 +157,8 @@ public class GLRenderer {
     public void updateData(byte[] ydata, byte[] udata, byte[] vdata) {
 //        Log.i(TAG, "updateData y : "+ ydata.length +" u : "+ udata.length +" v : "+ vdata.length);
         synchronized (this) {
-            yuvRender.draw(ydata,udata,vdata);
+            updateSurface = true;
+            yuvRender.draw(ydata, udata, vdata);
         }
     }
 
@@ -149,10 +173,10 @@ public class GLRenderer {
                         status = nativeInitSDLThreadYUV(url, wdith, height, pixel_type, fps);
                     }
                     else{
-                        status = nativeInitSDLThread(url, isStreamMedia, 0);
+                        status = nativeInitSDLThread(url, isStreamMedia, 0, new Surface(mSurfaceTexture));
                     }
                     if(listener != null) {
-                        listener.renderThreadFinish(status);
+                        listener.DecodeThreadFinish(status);
                     }
                 }
             };
@@ -175,7 +199,7 @@ public class GLRenderer {
     }
 
 
-    public void setListener(RenderListener listener) {
+    public void setListener(DecodeListener listener) {
         this.listener = listener;
     }
 
@@ -243,7 +267,7 @@ public class GLRenderer {
         }
     }
 
-    interface RenderListener{
+    interface DecodeListener {
         void setProgressRate(int frameConut);
         void setProgressRateFull();
         void setProgressDuration(long duration);
@@ -254,7 +278,7 @@ public class GLRenderer {
         void showLoading();
         void changeCodec(String codec_name);
         void setTimeBase(double timeBase);
-        void renderThreadFinish(int result_code);
+        void DecodeThreadFinish(int result_code);
         void surfaceCreated();
         void surfaceChanged();
         void surfaceDestroyed();
@@ -262,7 +286,7 @@ public class GLRenderer {
 
     //CUSTOM JNI
     private native int nativeInitSDLThreadYUV(String url, int wdith, int height, int pixel_type, int fps);
-    private native int nativeInitSDLThread(String url, boolean isStreamMedia, int rotate);
+    private native int nativeInitSDLThread(String url, boolean isStreamMedia, int rotate, Surface surface);
     private native void nativeBackSDLThread();
     public native void nativeCodecType(int codec_type);
     public native void nativePauseSDLThread();

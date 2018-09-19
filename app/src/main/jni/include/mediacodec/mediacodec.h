@@ -92,7 +92,7 @@ MediaCodecDecoder* mediacodec_decoder_alloc2(int isDebug);
 MediaCodecDecoder* mediacodec_decoder_alloc3();
 int mediacodec_decoder_free(MediaCodecDecoder* decoder);
 
-int mediacodec_decoder_open(MediaCodecDecoder* decoder);
+int mediacodec_decoder_open(MediaCodecDecoder* decoder, ANativeWindow *window);
 int mediacodec_decoder_close(MediaCodecDecoder* decoder);
 	
 int mediacodec_decoder_decode(MediaCodecDecoder* decoder, uint8_t* in, int offset, uint8_t* out, int length, int* error_code);

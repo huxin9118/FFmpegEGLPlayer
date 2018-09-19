@@ -6,16 +6,18 @@ package com.example.ffmpegsdlplayer.media.opgl;
 import java.util.concurrent.ArrayBlockingQueue;
 
 
+import android.graphics.SurfaceTexture;
+import android.opengl.GLES20;
 import android.util.Log;
 import android.view.Surface;
 
-import com.example.ffmpegsdlplayer.media.opgl.egl.DefaultContextFactory;
-import com.example.ffmpegsdlplayer.media.opgl.egl.DefaultWindowSurfaceFactory;
-import com.example.ffmpegsdlplayer.media.opgl.egl.EGLConfigChooser;
-import com.example.ffmpegsdlplayer.media.opgl.egl.EGLContextFactory;
-import com.example.ffmpegsdlplayer.media.opgl.egl.EGLHelper;
-import com.example.ffmpegsdlplayer.media.opgl.egl.EGLWindowSurfaceFactory;
-import com.example.ffmpegsdlplayer.media.opgl.egl.RGB565EGLConfigChooser;
+import com.example.ffmpegsdlplayer.media.egl.DefaultContextFactory;
+import com.example.ffmpegsdlplayer.media.egl.DefaultWindowSurfaceFactory;
+import com.example.ffmpegsdlplayer.media.egl.EGLConfigChooser;
+import com.example.ffmpegsdlplayer.media.egl.EGLContextFactory;
+import com.example.ffmpegsdlplayer.media.egl.EGLHelper;
+import com.example.ffmpegsdlplayer.media.egl.EGLWindowSurfaceFactory;
+import com.example.ffmpegsdlplayer.media.egl.RGB565EGLConfigChooser;
 
 /**
  * @author c22188
@@ -54,28 +56,78 @@ public class YUVRender {
 	private OpenGLHelper mOpenGLHelper;
 
 	private Surface mSurface;
+	private int renderMode;
 
 	private int videoWidth;
 	private int videoHeight;
 	private int outputWidth;
 	private int outputHeight;
-	private byte[]yuv;
+	private Object data;
 
-	private ArrayBlockingQueue<byte[]> mQueue = new ArrayBlockingQueue<>(10);
+	private ArrayBlockingQueue<Object> mQueue = new ArrayBlockingQueue<>(10);
 
-	private Thread yuvRenderThread = new Thread() {
+	private Thread yuvRenderThread;
+	private boolean isRunning;
+	private SurfaceTexture surfaceTexture;
+	SurfaceTexture.OnFrameAvailableListener surfaceTextureListener;
+	RenderListener renderThreadListener;
+	/**
+	 * 构造方法
+	 */
+	public YUVRender(Surface surface ,final int mode) {
+		mSurface = surface;
+		renderMode = mode;
+	}
+
+	public void init(YUVRender.RenderListener renderListener,SurfaceTexture.OnFrameAvailableListener frameAvailableListener){
+		renderThreadListener = renderListener;
+		surfaceTextureListener = frameAvailableListener;
+		mEGLConfigChooser = new RGB565EGLConfigChooser(true, EGL_CONTEXT_CLIENT_VERSION);
+		mEGLContextFactory = new DefaultContextFactory(EGL_CONTEXT_CLIENT_VERSION);
+		mEGLWindowSurfaceFactory = new DefaultWindowSurfaceFactory();
+		mEGLHelper = new EGLHelper(mEGLConfigChooser, mEGLContextFactory, mEGLWindowSurfaceFactory, mSurface);
+		if(renderMode == 0){
+			mOpenGLHelper = new YUVOpenGLHelper();
+		}else if(renderMode == 1){
+			mOpenGLHelper = new TextureOpenGLHelper();
+		}
+		yuvRenderThread = new RenderThread();
+		yuvRenderThread.start();
+	}
+
+	public int getTextureId(){
+		if(mOpenGLHelper != null) {
+			return mOpenGLHelper.getTextureId();
+		}
+		return -1;
+	}
+
+	public interface RenderListener{
+		void OnInit(SurfaceTexture surfaceTexture);
+	}
+
+	class RenderThread extends Thread{
 		public void run() {
 			initEGL();
 			initOpenGL();
-			while (yuvRenderThread == Thread.currentThread()) {
+//			int textures[] = new int[1];
+//			GLES20.glGenTextures(1, textures, 0);
+//			mTextureId = textures[0];
+			surfaceTexture = new SurfaceTexture(mOpenGLHelper.getTextureId());
+			surfaceTexture.setOnFrameAvailableListener(surfaceTextureListener);
+			isRunning = true;
+			renderThreadListener.OnInit(surfaceTexture);
+			while (isRunning) {
 				try {
-					byte[] yuv = mQueue.take();
-					mOpenGLHelper.onVideoSizeChanged(videoWidth, videoHeight);
-					mOpenGLHelper.onOutputSizeChanged(outputWidth, outputHeight);
-
-					mOpenGLHelper.onDrawFrame(yuv);
-					int ret = mEGLHelper.swap();
+					Object data = mQueue.take();
+					if(isRunning) {
+						mOpenGLHelper.onVideoSizeChanged(videoWidth, videoHeight);
+						mOpenGLHelper.onOutputSizeChanged(outputWidth, outputHeight);
+						Log.i(TAG, "run: mQueue.size()="+mQueue.size());
+						mOpenGLHelper.onDrawFrame(data);
+						int ret = mEGLHelper.swap();
 //					Log.d(TAG, "draw swap ret " + ret);
+					}
 				} catch (InterruptedException e) {
 					break;
 				}
@@ -83,40 +135,29 @@ public class YUVRender {
 			destoryEGL();
 			destoryOpenGL();
 		}
-	};
-
-	/**
-	 * 构造方法
-	 */
-	public YUVRender(Surface surfaceHolder) {
-		mSurface = surfaceHolder;
-	}
-
-	public void init(){
-		mEGLConfigChooser = new RGB565EGLConfigChooser(true, EGL_CONTEXT_CLIENT_VERSION);
-		mEGLContextFactory = new DefaultContextFactory(EGL_CONTEXT_CLIENT_VERSION);
-		mEGLWindowSurfaceFactory = new DefaultWindowSurfaceFactory();
-		mEGLHelper = new EGLHelper(mEGLConfigChooser, mEGLContextFactory, mEGLWindowSurfaceFactory, mSurface);
-		mOpenGLHelper = new OpenGLHelper();
-		yuvRenderThread.start();
 	}
 
 	public void draw(byte[] yuv) {
-		this.yuv = yuv;
-		mQueue.offer(this.yuv);
+		data = yuv;
+		mQueue.offer(data);
 	}
 
 	public void draw(byte[] y, byte[] u, byte[] v) {
-		this.yuv = new byte[y.length+u.length+y.length];
-		System.arraycopy(y, 0, this.yuv, 0 , y.length);
-		System.arraycopy(u, 0, this.yuv, y.length , u.length);
-		System.arraycopy(v, 0, this.yuv, y.length+u.length , v.length);
-		mQueue.offer(this.yuv);
+		data = new byte[y.length+u.length+y.length];
+		System.arraycopy(y, 0, data, 0 , y.length);
+		System.arraycopy(u, 0, data, y.length , u.length);
+		System.arraycopy(v, 0, data, y.length+u.length , v.length);
+		mQueue.offer(data);
+	}
+
+	public void draw(SurfaceTexture surfaceTexture) {
+		data = surfaceTexture;
+		mQueue.offer(surfaceTexture);
 	}
 
 	public void ReDraw() {
-		if(this.yuv != null) {
-			mQueue.offer(this.yuv);
+		if(data != null) {
+			mQueue.offer(data);
 		}
 	}
 
@@ -131,10 +172,12 @@ public class YUVRender {
 	}
 
 	public void destory() {
-		Thread t = yuvRenderThread;
-		yuvRenderThread = null;
-		if(t!=null){
-			t.interrupt();
+		isRunning = false;
+		mQueue.offer(new Object());
+		try {
+			yuvRenderThread.join();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
 	}
 
@@ -152,7 +195,11 @@ public class YUVRender {
 	 * 初始化OpenGL接口
 	 */
 	private void initOpenGL() {
-		mOpenGLHelper.init(OpenGLHelper.NO_FILTER_VERTEX_SHADER, OpenGLHelper.NO_FILTER_FRAGMENT_SHADER);
+		if(renderMode == 0) {
+			mOpenGLHelper.init(YUVOpenGLHelper.NO_FILTER_VERTEX_SHADER, YUVOpenGLHelper.NO_FILTER_FRAGMENT_SHADER);
+		}else if(renderMode == 1) {
+			mOpenGLHelper.init(TextureOpenGLHelper.VERTEX_SHADER, TextureOpenGLHelper.FRAGMENT_SHADER);
+		}
 	}
 
 	public void setRotation(final int rotation, final boolean flipHorizontal, final boolean flipVertical) {

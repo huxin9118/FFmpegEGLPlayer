@@ -1,7 +1,7 @@
 /**
  * 
  */
-package com.example.ffmpegsdlplayer.media.opgl.egl;
+package com.example.ffmpegsdlplayer.media.egl;
 
 /**
  * This class will choose a RGB_565 surface with

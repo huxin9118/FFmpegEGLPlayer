@@ -1,7 +1,7 @@
 /**
  * 
  */
-package com.example.ffmpegsdlplayer.media.opgl.egl;
+package com.example.ffmpegsdlplayer.media.egl;
 
 import javax.microedition.khronos.egl.EGL10;
 import javax.microedition.khronos.egl.EGL11;
@@ -13,7 +13,6 @@ import javax.microedition.khronos.opengles.GL;
 
 import android.util.Log;
 import android.view.Surface;
-import android.view.SurfaceHolder;
 
 /**
  * EGL接口帮助类
@@ -53,7 +52,7 @@ public class EGLHelper {
 	/**
 	 * 显示句柄
 	 */
-	private Surface mSurfaceHolder;
+	private Surface surface;
 
 	/**
 	 * 构造方法
@@ -61,16 +60,16 @@ public class EGLHelper {
 	 * @param mEGLConfigChooser
 	 * @param mEGLContextFactory
 	 * @param mEGLWindowSurfaceFactory
-	 * @param mSurfaceHolder
+	 * @param surface
 	 *
 	 */
 	public EGLHelper(EGLConfigChooser mEGLConfigChooser, EGLContextFactory mEGLContextFactory,
-			EGLWindowSurfaceFactory mEGLWindowSurfaceFactory, Surface mSurfaceHolder) {
+			EGLWindowSurfaceFactory mEGLWindowSurfaceFactory, Surface surface) {
 		super();
 		this.mEGLConfigChooser = mEGLConfigChooser;
 		this.mEGLContextFactory = mEGLContextFactory;
 		this.mEGLWindowSurfaceFactory = mEGLWindowSurfaceFactory;
-		this.mSurfaceHolder = mSurfaceHolder;
+		this.surface = surface;
 	}
 
 	public void start() {
@@ -99,7 +98,7 @@ public class EGLHelper {
 			throw new RuntimeException("eglInitialize failed");
 		}
 
-		if (mSurfaceHolder == null) {
+		if (surface == null) {
 			mEglConfig = null;
 			mEglContext = null;
 		} else {
@@ -152,8 +151,8 @@ public class EGLHelper {
 		 */
 		destroySurfaceImp();
 
-		if (mSurfaceHolder != null) {
-			mEglSurface = mEGLWindowSurfaceFactory.createWindowSurface(mEgl, mEglDisplay, mEglConfig, mSurfaceHolder);
+		if (surface != null) {
+			mEglSurface = mEGLWindowSurfaceFactory.createWindowSurface(mEgl, mEglDisplay, mEglConfig, surface);
 		} else {
 			mEglSurface = null;
 		}
@@ -222,7 +221,7 @@ public class EGLHelper {
 	private void destroySurfaceImp() {
 		if (mEglSurface != null && mEglSurface != EGL10.EGL_NO_SURFACE) {
 			mEgl.eglMakeCurrent(mEglDisplay, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_CONTEXT);
-			if (mSurfaceHolder != null) {
+			if (surface != null) {
 				mEGLWindowSurfaceFactory.destroySurface(mEgl, mEglDisplay, mEglSurface);
 			}
 			mEglSurface = null;

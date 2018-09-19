@@ -61,5 +61,5 @@ LOCAL_SRC_FILES := simplest_ffmpeg_sdl_player.c \
 				mediacodec_utils.c \
 				NativeCodec.cpp
 LOCAL_SHARED_LIBRARIES := ffmpeg yuv
-LOCAL_LDLIBS := -lGLESv1_CM -lGLESv2 -llog
+LOCAL_LDLIBS := -llog -landroid
 include $(BUILD_SHARED_LIBRARY)

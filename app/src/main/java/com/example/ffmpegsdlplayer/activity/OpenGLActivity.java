@@ -29,7 +29,7 @@ import android.widget.Toast;
 
 import com.example.ffmpegsdlplayer.R;
 import com.example.ffmpegsdlplayer.dao.UrlService;
-import com.example.ffmpegsdlplayer.media.opgl.OpenGLHelper;
+import com.example.ffmpegsdlplayer.media.opgl.YUVOpenGLHelper;
 
 public class OpenGLActivity extends AppCompatActivity {
     private Toast mToast;
@@ -60,7 +60,7 @@ public class OpenGLActivity extends AppCompatActivity {
     private RelativeLayout btnBack;
     private RelativeLayout btnZoom;
     private TextView btnCodecType;
-    private int zoom = OpenGLHelper.ZOOM_INSIDE;
+    private int zoom = YUVOpenGLHelper.ZOOM_INSIDE;
     private boolean isPause = false;
 
     private RelativeLayout topBar;
@@ -91,7 +91,7 @@ public class OpenGLActivity extends AppCompatActivity {
     private LinearLayout mSurfaceViewWrapper;
     private SurfaceView mSurfaceView;
     private GLRenderer mGLRenderer;
-    GLRenderer.RenderListener mGLRenderListener;
+    GLRenderer.DecodeListener mGLDecodeListener;
 
     // Setup
     @Override
@@ -245,20 +245,20 @@ public class OpenGLActivity extends AppCompatActivity {
             public void onClick(View v) {
                 updateShowUI();
                 switch (zoom){
-                    case OpenGLHelper.ZOOM_INSIDE:
-                        zoom = OpenGLHelper.ZOOM_ORIGINAL;
+                    case YUVOpenGLHelper.ZOOM_INSIDE:
+                        zoom = YUVOpenGLHelper.ZOOM_ORIGINAL;
                         imgZoom.setImageResource(R.drawable.ic_zoom_stretch);
                         break;
-                    case OpenGLHelper.ZOOM_ORIGINAL:
-                        zoom = OpenGLHelper.ZOOM_STRETCH;
+                    case YUVOpenGLHelper.ZOOM_ORIGINAL:
+                        zoom = YUVOpenGLHelper.ZOOM_STRETCH;
                         imgZoom.setImageResource(R.drawable.ic_zoom_crop);
                         break;
-                    case OpenGLHelper.ZOOM_STRETCH:
-                        zoom = OpenGLHelper.ZOOM_CROP;
+                    case YUVOpenGLHelper.ZOOM_STRETCH:
+                        zoom = YUVOpenGLHelper.ZOOM_CROP;
                         imgZoom.setImageResource(R.drawable.ic_zoom_inside);
                         break;
-                    case OpenGLHelper.ZOOM_CROP:
-                        zoom = OpenGLHelper.ZOOM_INSIDE;
+                    case YUVOpenGLHelper.ZOOM_CROP:
+                        zoom = YUVOpenGLHelper.ZOOM_INSIDE;
                         imgZoom.setImageResource(R.drawable.ic_zoom_original);
                         break;
                 }
@@ -345,7 +345,7 @@ public class OpenGLActivity extends AppCompatActivity {
 
         mSurfaceViewWrapper = (LinearLayout) findViewById(R.id.mSurfaceViewWrapper);
         mSurfaceView = (SurfaceView)findViewById(R.id.mSurfaceView);
-        mGLRenderer = new GLRenderer(mSurfaceView);
+        mGLRenderer = new GLRenderer(mSurfaceView, codec_type);
         mGLRenderer.nativeCodecType(codec_type);
 
         mSurfaceView.setOnClickListener(new View.OnClickListener() {
@@ -360,7 +360,7 @@ public class OpenGLActivity extends AppCompatActivity {
             }
         });
 
-        mGLRenderListener = new GLRenderer.RenderListener() {
+        mGLDecodeListener = new GLRenderer.DecodeListener() {
             public void setProgressRate(int frameConut){
 //               Log.i(TAG, "--------正在播放第"+frameConut+"帧-------");
                 progressRateHandler.sendEmptyMessage(frameConut);
@@ -442,7 +442,7 @@ public class OpenGLActivity extends AppCompatActivity {
             }
 
             @Override
-            public void renderThreadFinish(int result_code) {
+            public void DecodeThreadFinish(int result_code) {
                 showUIHandler.sendEmptyMessage(result_code);
                 finish();
             }
@@ -465,7 +465,7 @@ public class OpenGLActivity extends AppCompatActivity {
             }
         };
 
-        mGLRenderer.setListener(mGLRenderListener);
+        mGLRenderer.setListener(mGLDecodeListener);
     }
 
     private void showSetPixelDialog(){
@@ -656,16 +656,16 @@ public class OpenGLActivity extends AppCompatActivity {
     private void updateZoomStatus(int zoom){
         String textZoomStatus = "";
         switch (zoom){
-            case OpenGLHelper.ZOOM_INSIDE:
+            case YUVOpenGLHelper.ZOOM_INSIDE:
                 textZoomStatus = "适应屏幕";
                 break;
-            case OpenGLHelper.ZOOM_ORIGINAL:
+            case YUVOpenGLHelper.ZOOM_ORIGINAL:
                 textZoomStatus = "原始";
                 break;
-            case OpenGLHelper.ZOOM_STRETCH:
+            case YUVOpenGLHelper.ZOOM_STRETCH:
                 textZoomStatus = "拉伸";
                 break;
-            case OpenGLHelper.ZOOM_CROP:
+            case YUVOpenGLHelper.ZOOM_CROP:
                 textZoomStatus = "裁剪";
                 break;
         }
